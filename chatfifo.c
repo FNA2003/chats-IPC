@@ -6,8 +6,8 @@
 #include <string.h> // strncmp(), strlen()
 
 
-#define PROTOCOLO_SALIDA = "bye"
-#define BUFFER_SIZE = 256
+#define PROTOCOLO_SALIDA "bye"
+#define BUFFER_SIZE 256
 
 static void procesoLector(const int fdLectura);
 static void procesoEscritor(const int fdEscritura);
@@ -68,8 +68,7 @@ static void procesoLector(const int fdLectura) {
 		}
 		bufferIn[caracteresLeidos] = '\0';
 		printf("[Usuario]: %s\n", bufferIn);
-	} while(
-		strncmp(bufferIn, PROTOCOLO_SALIDA, PROTOCOLO_SIZE) != 0 || caracteresLeidos > 0);
+	} while(strncmp(bufferIn, PROTOCOLO_SALIDA, PROTOCOLO_SIZE) != 0 || caracteresLeidos > 0);
 }
 static void procesoEscritor(const int fdEscritura) {
 	char bufferOut[BUFFER_SIZE + 1];
@@ -86,6 +85,5 @@ static void procesoEscritor(const int fdEscritura) {
 			perror("Error al escribir en el FIFO");
 			return;
 		}
-	} while(
-		strncmp(bufferOut, PROTOCOLO_SALIDA, PROTOCOLO_SIZE) != 0 || caracteresLeidos > 0);
+	} while(strncmp(bufferOut, PROTOCOLO_SALIDA, PROTOCOLO_SIZE) != 0);
 }
