@@ -4,6 +4,7 @@
 #include <unistd.h> // fork(), pid_t entre otros
 #include <wait.h>   // waitpid()
 #include <string.h> // strncmp(), strlen(), memset()
+#include <signal.h> // Usamos la señal SIGCHLD para que el hijo lector le avise al padre cuando terminó de leer (otro extremo envió protocolo de salida)
 
 
 #define PROTOCOLO_SALIDA "bye"
@@ -11,6 +12,10 @@
 
 static void procesoLector(const int fdLectura);
 static void procesoEscritor(const int fdEscritura);
+
+/* Variable gloabal para que use la señal cuando termine el proceso hijo para finalizar al padre */
+sig_atomic_t seguirEscribiendo = 1;
+void senialPadre(int senialN);
 
 int main(int argc, char* argv[]) {
 	if (argc != 3) {
@@ -45,7 +50,7 @@ int main(int argc, char* argv[]) {
 	}
 	
 	/* Ahora, trato de crear el proceso lector y, en caso de poder
-	asigno las funciones de cada proceso */
+	asigno las funciones a cada proceso */
 	pidLector = fork();
 	if (pidLector < 0) { // Caso de error
 		perror("Error al crear el proceso lector");
@@ -56,11 +61,13 @@ int main(int argc, char* argv[]) {
 		close(fifoLectura);
 		return EXIT_SUCCESS;
 	} else { // Proceso padre, será el proceso escritor
+		signal(SIGCHLD, senialPadre); // Señal para, que si termina antes el proceso hijo, cortemos al padre
 		close(fifoLectura);
 		procesoEscritor(fifoEscritura);
 		close(fifoEscritura);
 	}
 	
+	kill(pidLector, SIGKILL); // Y, esta señal, es por si termina el padre antes que el hijo
 	waitpid(pidLector, NULL, 0);
 	return EXIT_SUCCESS;
 }
@@ -80,13 +87,14 @@ static void procesoLector(const int fdLectura) {
 		} else if (caracteresLeidos == 0) { // EOF, el escritor cerró su extremo
 			break;
 		}
-		bufferIn[caracteresLeidos] = '\0';
+		bufferIn[caracteresLeidos-1] = '\0'; // Borro el '\n'
 		printf("[Usuario]: %s\n", bufferIn);
 	} while(strncmp(bufferIn, PROTOCOLO_SALIDA, PROTOCOLO_SIZE) != 0);
 }
 static void procesoEscritor(const int fdEscritura) {
 	char bufferOut[BUFFER_SIZE + 1];
 	const size_t PROTOCOLO_SIZE = strlen(PROTOCOLO_SALIDA);
+	size_t tamanioMensaje;
 	
 	do {
 		memset(bufferOut, '\0', BUFFER_SIZE + 1);
@@ -96,10 +104,16 @@ static void procesoEscritor(const int fdEscritura) {
 		if (fgets(bufferOut, BUFFER_SIZE+1, stdin) == NULL) {
 			perror("Error al leer entrada estándar");
 			return;
-		}		
-		if (write(fdEscritura, bufferOut, BUFFER_SIZE+1) < 0) {
+		}
+		tamanioMensaje = strlen(bufferOut); // Evito mandar basura al comprobar la cantidad de caracteres de entrada
+		if (write(fdEscritura, bufferOut, tamanioMensaje) < 0) {
 			perror("Error al escribir en el FIFO");
 			return;
 		}
-	} while(strncmp(bufferOut, PROTOCOLO_SALIDA, PROTOCOLO_SIZE) != 0);
+	} while(strncmp(bufferOut, PROTOCOLO_SALIDA, PROTOCOLO_SIZE) != 0 && seguirEscribiendo);
+}
+
+void senialPadre(int senialN) {
+	printf("Se recibió senial bip bup\n");
+	seguirEscribiendo = 0;	
 }
