@@ -21,7 +21,7 @@ int main(int argc, char* argv[]) {
 	pid_t pidLector;
 	
 	/* Abro los fifo's si se puede, sino, retorno */
-	fifoEscritura = open(argv[1], O_WRONLY);
+	fifoEscritura = open(argv[1], O_WRONLY, O_NONBLOCK); // El de escritura por defecto lo abrimos no bloqueante para que pueda llegar al de lectura
 	if (fifoEscritura < 0) {
 		perror("Error al tratar de abrir el fifo de escritura '<fifo1>'");
 		return EXIT_FAILURE;
