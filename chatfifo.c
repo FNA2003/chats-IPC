@@ -3,7 +3,7 @@
 #include <stdlib.h> // EXIT_FAILURE, atoi() entre otros
 #include <unistd.h> // fork(), pid_t entre otros
 #include <wait.h>   // waitpid()
-#include <string.h> // strncmp(), strlen()
+#include <string.h> // strncmp(), strlen(), memset()
 
 
 #define PROTOCOLO_SALIDA "bye"
@@ -20,16 +20,26 @@ int main(int argc, char* argv[]) {
 	int fifoLectura, fifoEscritura;
 	pid_t pidLector;
 	
-	/* Abro los fifo's si se puede, sino, retorno */
-	fifoEscritura = open(argv[1], O_WRONLY, O_NONBLOCK); // El de escritura por defecto lo abrimos no bloqueante para que pueda llegar al de lectura
-	if (fifoEscritura < 0) {
-		perror("Error al tratar de abrir el fifo de escritura '<fifo1>'");
-		return EXIT_FAILURE;
-	}
-	
-	fifoLectura = open(argv[2], O_RDONLY);
+	/* Voy a abrir los fifo's de una manera secuencial para tratar de evitar el bloqueo ante 
+	la espera de uno u otro (no hay sin. de procesos). Además, ante cualquier error cierro todo y fin de programa */
+	// 1. Abro el fifo de lectura en modo no-bloqueante
+	fifoLectura = open(argv[2], O_RDONLY | O_NONBLOCK);
 	if (fifoLectura < 0) {
 		perror("Error al tratar de abrir el fifo de lectura '<fifo2>'");
+		return EXIT_FAILURE;
+	}
+	// 2. Abro el fifo correspondiente a la escritura con el fifo lector YA ABIERTO
+	fifoEscritura = open(argv[1], O_WRONLY);
+	if (fifoEscritura < 0) {
+		perror("Error al tratar de abrir el fifo de escritura '<fifo1>'");
+		close(fifoLectura);
+		return EXIT_FAILURE;
+	}
+	// 3. Cerramos el fifo lector no-bloqueante y lo abrimos de manera bloqueante (normal)
+	close(fifoLectura);
+	fifoLectura = open(argv[2], O_RDONLY);
+	if (fifoLectura < 0) {
+		perror("Error al tratar de abrir el fifo de escritura '<fifo1>'");
 		close(fifoEscritura);
 		return EXIT_FAILURE;
 	}
@@ -61,26 +71,32 @@ static void procesoLector(const int fdLectura) {
 	int caracteresLeidos = 0;
 	
 	do {
+		memset(bufferIn, '\0', BUFFER_SIZE + 1);
+
 		caracteresLeidos = read(fdLectura, bufferIn, BUFFER_SIZE);
 		if (caracteresLeidos < 0) {
 			perror("Error en la lectura del FIFO");
 			return;
+		} else if (caracteresLeidos == 0) { // EOF, el escritor cerró su extremo
+			break;
 		}
 		bufferIn[caracteresLeidos] = '\0';
 		printf("[Usuario]: %s\n", bufferIn);
-	} while(strncmp(bufferIn, PROTOCOLO_SALIDA, PROTOCOLO_SIZE) != 0 || caracteresLeidos > 0);
+	} while(strncmp(bufferIn, PROTOCOLO_SALIDA, PROTOCOLO_SIZE) != 0);
 }
 static void procesoEscritor(const int fdEscritura) {
 	char bufferOut[BUFFER_SIZE + 1];
 	const size_t PROTOCOLO_SIZE = strlen(PROTOCOLO_SALIDA);
 	
 	do {
+		memset(bufferOut, '\0', BUFFER_SIZE + 1);
+
 		printf("> ");
 		// fgets() siempre agrega un '\0'
 		if (fgets(bufferOut, BUFFER_SIZE+1, stdin) == NULL) {
 			perror("Error al leer entrada estándar");
 			return;
-		}
+		}		
 		if (write(fdEscritura, bufferOut, BUFFER_SIZE+1) < 0) {
 			perror("Error al escribir en el FIFO");
 			return;
