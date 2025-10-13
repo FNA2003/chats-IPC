@@ -44,4 +44,5 @@ unlink <fifo2>
 - El programa recibe dos argumentos por línea de comandos:
 > Primer argumento: nombre del FIFO de escritura.
 > Segundo argumento: nombre del FIFO de lectura.
-- El protocolo de salida se basa en la palabra clave bye.
+- El protocolo de salida se basa en la palabra clave _'bye'_.
+- Se abrirá el extremo de lectura en modo no-bloqueante seguido del extremo de escritura para luego cerrar el primer **FD** y volver a abrir el fifo de lectura. Esto con el fin de evitar un _'Abrazo mortal'_.
