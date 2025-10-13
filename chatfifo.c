@@ -114,6 +114,6 @@ static void procesoEscritor(const int fdEscritura) {
 }
 
 void senialPadre(int senialN) {
-	printf("Se recibió senial bip bup\n");
+	printf("[DEBUG] El proceso hijo recibió el protocolo de corte, cerrando padre en la próxima iteración!\n");
 	seguirEscribiendo = 0;	
 }
