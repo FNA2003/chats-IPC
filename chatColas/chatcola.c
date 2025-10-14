@@ -1,55 +1,49 @@
-#include <sys/msg.h> // Librería de cola de mensajes
+#include <sys/msg.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <wait.h>
 #include <errno.h>
 #include <unistd.h>
 #include <signal.h>
 #include <string.h>
 #include <sys/types.h>
-
-extern int errno;
+#include <wait.h>
 
 #define BUFFER_SIZE 256
 #define COLA_ADDR 0xA
 #define PROTOCOLO_SALIDA "bye"
 
-sig_atomic_t ejecutarEscritor = 1;
-
 typedef struct msgbuf {
-	long type; 				 // Tipo de mensaje, requerido por sys/msg.h
-	char mtext[BUFFER_SIZE]; // Mensaje a enviar, en nuestro caso, un arreglo de char's
+	long type;
+	char mtext[BUFFER_SIZE];
 } msgbuf;
 
-static void leerCola(int cola_id, msgbuf colaLectura);
-static void escribirCola(int cola_id, msgbuf colaEscritura);
+sig_atomic_t seguirEscribiendo = 1;
+
+// Prototipos
+static void leerCola(int cola_id, int tipoLectura);
+static void escribirCola(int cola_id, int tipoEscritura);
 void finalizarPadre(int senial);
+
 
 int main(int argc, char *argv[]) {
 	if (argc != 3) {
-		fprintf(stderr, "Uso incorrecto\n\tEjecutar cómo: ./chatColas <tipo_cola_lectura> <tipo_cola_escritura>\n");
+		fprintf(stderr, "Uso:\n\t./chatColas <tipo_cola_lectura> <tipo_cola_escritura>\n");
 		return EXIT_FAILURE;
 	}
+	
 	long tipoLectura = atol(argv[1]);
 	long tipoEscritura = atol(argv[2]);
-	
-	msgbuf colaEscritura;
-	msgbuf colaLectura;
-		
-	int cola_id;
-	pid_t procesoLector;
-	
-	
-	signal(SIGCHLD, finalizarPadre); // Señal que usará el padre para finalizar la escritura si el hijo recibió un "bye" y se fué
-	
 	// Empiezo por verificar si hubo un error de parámetros
 	if (tipoLectura == tipoEscritura) {
 		fprintf(stderr, "Los tipos de colas de mensajes ingresados son iguales ó existió un error al castear\n");
 		return EXIT_FAILURE;
 	}
+	
+	// Señal que usará el padre para finalizar la escritura si el hijo recibió un "bye" y se fué
+	signal(SIGCHLD, finalizarPadre);
 
 	// Luego, tratamos de abrir, o crear la cola de mensajes (Abrir -> Somos el segundo proceso, Crear -> Primero)
-	cola_id = msgget(COLA_ADDR, 0);
+	int cola_id = msgget(COLA_ADDR, 0);
 	if (cola_id < 0 && errno == ENOENT)
 		cola_id = msgget(COLA_ADDR, IPC_CREAT | IPC_EXCL | 0600);
 	if (cola_id < 0) {
@@ -57,27 +51,23 @@ int main(int argc, char *argv[]) {
 		return EXIT_FAILURE;
 	}
 	printf("\033[1;32m[DEBUG]\033[0m\033\n\t[37;44mID de la cola de mensajes: %d\033[0m\n", cola_id);
-	
-	
-	// Asigno a la estructura de la cola de mensajes el tipo de recepción y emisión
-	colaEscritura.type = tipoEscritura;
-	colaLectura.type = tipoLectura;
+
 	
 	// Creo el proceso lector y le asigno a cada uno su función
-	procesoLector = fork();
+	pid_t procesoLector = fork();
 	if (procesoLector < 0) {
 		perror("Error al crear el proceso lector"); // Nota; no borro la cola de mensajes para que se vuelva a ejecutar el programa
 		return EXIT_FAILURE;
 	}
 	
 	if (procesoLector == 0) {
-		leerCola(cola_id, colaLectura);
+		leerCola(cola_id, tipoLectura);
 		return EXIT_SUCCESS;
 	} else {
-		escribirCola(cola_id, colaEscritura);
+		escribirCola(cola_id, tipoEscritura);
 	}	
 	
-	kill(SIGTERM, procesoLector); // Forzamos al hijo a que finalize, si es que finalizó el padre
+	kill(procesoLector, SIGTERM); // Forzamos al hijo a que finalize, si es que finalizó antes el padre
 	waitpid(procesoLector, NULL, 0);
 	
 	// Nota: Como los dos procesos, al terminar ejecutarán esta línea, uno fallará al tratar de borrar la cola de mensajes
@@ -87,39 +77,48 @@ int main(int argc, char *argv[]) {
 	return EXIT_SUCCESS;
 }
 
-static void leerCola(int cola_id, msgbuf colaLectura) {
-	const size_t tamanioProtocolo = strlen(PROTOCOLO_SALIDA);
+static void leerCola(int cola_id, int tipoLectura) {
+	msgbuf mensaje;
+	mensaje.type = tipoLectura;
 	
 	do {
-		memset(colaLectura.mtext, (int) '\0', BUFFER_SIZE);
+		memset(mensaje.mtext, '\0', BUFFER_SIZE);
 		
-		// Recibo el mensaje a la cola especificada de lectura, y, verifico si hubo un error
-		if (msgrcv(cola_id, (void *) &colaLectura, sizeof(msgbuf), colaLectura.type, 0) < 0) {
-			perror("Error al leer la cola de mensajes");
+		// Leo de la cola de mensajes y verifico errores
+		ssize_t bytes = msgrcv(cola_id, (void *) &mensaje, sizeof(msgbuf), tipoLectura, 0);
+		if (bytes < 0){
+			perror("Error al leer mensaje");
 			return;
 		}
+		mensaje.mtext[bytes] = '\0'; // Apesar que el que escriba asegura el caracter nulo, lo aseguro
+		printf("[USUARIO] %s\n", mensaje.mtext);
 		
-		printf("[USUARIO] %s\n", colaLectura.mtext);
-		
-	} while(strncmp(colaLectura.mtext, PROTOCOLO_SALIDA, tamanioProtocolo));
+	} while(strncmp(mensaje.mtext, PROTOCOLO_SALIDA, strlen(PROTOCOLO_SALIDA)) != 0);
 }
-static void escribirCola(int cola_id, msgbuf colaEscritura) {
-	const size_t tamanioProtocolo = strlen(PROTOCOLO_SALIDA);
+
+static void escribirCola(int cola_id, int tipoEscritura) {
+	msgbuf mensaje;
+	mensaje.type = tipoEscritura;
 	
 	do {
-		memset(colaEscritura.mtext, (int) '\0', BUFFER_SIZE);
+		memset(mensaje.mtext, (int) '\0', BUFFER_SIZE);
 		printf(">: ");
 
-		// NOTA: fgets() me asegura el \0, por eso no debo agregarlo o restarle longitud al buffer
-		if (fgets(colaEscritura.mtext, BUFFER_SIZE, stdin) == NULL) {
+		// fgets() asegura el nulo
+		if (fgets(mensaje.mtext, BUFFER_SIZE, stdin) == NULL) {
 			perror("Error al leer la entrada estándar");
 			return;
 		}
 		
-		msgsnd(cola_id, (void *)&colaEscritura, sizeof(msgbuf), 0);
-	} while(strncmp(colaEscritura.mtext, PROTOCOLO_SALIDA, tamanioProtocolo) && ejecutarEscritor);
+        mensaje.mtext[strcspn(mensaje.mtext, "\n")] = '\0'; // Removemos el salto de línea
+		
+		if (msgsnd(cola_id, (void *)&mensaje, sizeof(msgbuf), 0) < 0) {
+			perror("Error al enviar el mensaje");
+			return;
+		}
+	} while(strncmp(mensaje.mtext, PROTOCOLO_SALIDA, strlen(PROTOCOLO_SALIDA)) != 0 && seguirEscribiendo);
 }
 
 void finalizarPadre(int senial) {
-	ejecutarEscritor = 0;
+	seguirEscribiendo = 0;
 }
