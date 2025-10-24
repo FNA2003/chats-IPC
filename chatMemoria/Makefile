@@ -3,7 +3,7 @@ CC = gcc
 CFLAGS = -Ilib -Wall -Wextra
 
 # Rutas de compilables
-SRC = src/main.c lib/memoria/memoria.c
+SRC = src/main.c lib/memoria/memoria.c lib/semaforos/semaforos.c lib/enlace/enlace.c
 
 # Nombre del compilado
 TAR = chatMemoria.out

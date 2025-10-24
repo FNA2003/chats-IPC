@@ -5,9 +5,9 @@
 
 // Señales V y P (respectivamente) de manejo de semáforos básica
 
-void signal(int semId, int semNum);
+void sem_signal(int semId, int semNum);
 
-void wait(int semId, int semNum);
+void sem_wait(int semId, int semNum);
 
 int getSem(key_t semKeyEsc, key_t semKeyLec, int *semIDEsc, int *semIDLector);
 

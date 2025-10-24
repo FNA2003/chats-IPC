@@ -3,7 +3,7 @@
 #include <errno.h>
 #include <stdio.h>
 
-void signal(int semId, int semNum) {
+void sem_signal(int semId, int semNum) {
     struct sembuf sem_op; // Estructura propia para el trabajo con semop
 
     sem_op.sem_num = semNum; // Número dentro del 'array' de semáforos
@@ -13,7 +13,7 @@ void signal(int semId, int semNum) {
     semop(semId, &sem_op, 1); // Realizo una única operación (signal) sobre el semáforo
 }
 
-void wait(int semId, int semNum) {
+void sem_wait(int semId, int semNum) {
     struct sembuf sem_op; // Estructura propia para el trabajo con semop
 
     sem_op.sem_num = semNum; // Número dentro del 'array' de semáforos
@@ -61,15 +61,20 @@ int getSem(key_t semKeyEsc, key_t semKeyLec, int *semIDEsc, int *semIDLector) {
 }
 
 int borrarSemaforos(int *semId1, int *semId2) {
-    int retVal = 0;
-    if (semId1)
-        retVal += semctl(*semId1, 0, IPC_RMID);
-    if (semId2)
-        retVal += semctl(*semId2, 0, IPC_RMID);
-
-    if (retVal < 0) { 
-        fprintf(stderr, "Error al tratar de eliminar uno de los semáforos!\n");
-        return -1;
+    int retVal;
+    if (semId1) {
+        retVal = semctl(*semId1, 0, IPC_RMID);
+        if (retVal < 0 && errno != EIDRM && errno != EINVAL) {
+            perror("Error al tratar de borrar el primer semáforo!");
+            return -1;
+        }
+    }
+    if (semId2) {
+        retVal = semctl(*semId2, 0, IPC_RMID);
+        if (retVal < 0 && errno != EIDRM && errno != EINVAL) {
+            perror("Error al tratar de borrar el segundo semáforo!");
+            return -2;
+        }
     }
 
     return 0;

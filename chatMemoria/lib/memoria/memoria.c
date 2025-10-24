@@ -34,14 +34,20 @@ int eliminarMemoriasCompartidas(int* shmId1, int* shmId2) {
 	int retVal = 0;
 
 	// Si hay un puntero a cualquiera de las dos memorias, trato de borrarlas
-	// Nota; IPC_RMID retorna 0 en caso de éxito, -1 en error
-	if (shmId1) retVal += shmctl(*shmId1, IPC_RMID, NULL);
-	if (shmId2) retVal += shmctl(*shmId2, IPC_RMID, NULL);
 	
-	if (retVal < 0) {
-		fprintf(stderr, "Error al tratar de borrar memoria compartida\n");
-		return -1;
+	if (shmId1) {
+		retVal = shmctl(*shmId1, IPC_RMID, NULL);
+		if (retVal < 0 && errno != EIDRM && errno != EINVAL) {
+            perror("Error al tratar de borrar el primer segmento de memoria compartida!");
+            return -1;
+        }
 	}
-
+	if (shmId2) {
+		retVal = shmctl(*shmId2, IPC_RMID, NULL);
+		if (retVal < 0 && errno != EIDRM && errno != EINVAL) {
+            perror("Error al tratar de borrar el segundo segmento de memoria compartida!");
+            return -2;
+        }
+	}
 	return 0;
 }
