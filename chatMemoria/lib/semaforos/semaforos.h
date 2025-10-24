@@ -9,7 +9,7 @@ void signal(int semId, int semNum);
 
 void wait(int semId, int semNum);
 
-int getSem(key_t semkey1, key_t semkey2, int *semid1, int *semid2);
+int getSem(key_t semKeyEsc, key_t semKeyLec, int *semIDEsc, int *semIDLector);
 
 int borrarSemaforos(int *semId1, int *semId2);
 

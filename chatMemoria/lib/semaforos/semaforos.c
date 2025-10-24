@@ -25,23 +25,36 @@ void wait(int semId, int semNum) {
 }
 
 
-int getSem(key_t semkey1, key_t semkey2, int *semid1, int *semid2) {
-    if (!semid1 || !semid2) return -1;
+int getSem(key_t semKeyEsc, key_t semKeyLec, int *semIDEsc, int *semIDLector) {
+    if (!semIDEsc || !semIDLector) return -1;
 
-    *semid1 = semget(semkey1, 1, 0);
-    if (*semid1 < 0 && errno == ENOENT)
-        *semid1 = semget(semkey1, 1, IPC_CREAT | 0600);
-    if (*semid1 < 0) {
+    *semIDEsc = semget(semKeyEsc, 1, 0);
+    if (*semIDEsc < 0 && errno == ENOENT)
+        *semIDEsc = semget(semKeyEsc, 1, IPC_CREAT | 0600);
+    if (*semIDEsc < 0) {
         perror("Error al obtener/crear el semáforo 1");
         return -2;
     }
 
-    *semid2 = semget(semkey1, 1, 0);
-    if (*semid2 < 0 && errno == ENOENT)
-        *semid2 = semget(semkey2, 1, IPC_CREAT | 0600);
-    if (*semid2 < 0) {
-        perror("Error al obtener/crear el semáforo 2");
+    // Al semaforo de "aviso de escritura" lo inicializamos nosotros en 1
+    // Para evitar que el otro poceso lo cree y trate de acceder a el
+    if (semctl(*semIDEsc, 0, SETVAL, 1) < 0) { 
+        perror("Error al inicializar el semáforo de escritura");
         return -3;
+    }
+
+    *semIDLector = semget(semKeyLec, 1, 0);
+    if (*semIDLector < 0 && errno == ENOENT) {
+        *semIDLector = semget(semKeyLec, 1, IPC_CREAT | 0600);
+        
+        if (semctl(*semIDLector, 0, SETVAL, 0) < 0) { // Por las dudas, el semaforo de lectura estará "suspendido"
+            perror("Error al inicializar el semáforo de lectura");
+            return -4;
+        }
+    }
+    if (*semIDLector < 0) {
+        perror("Error al obtener/crear el semáforo de lectura");
+        return -5;
     }
 
     return 0;
