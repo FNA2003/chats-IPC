@@ -1,7 +1,7 @@
 #ifndef ENLACE_H
 #define ENLACE_H
 
-#include "memoria.h"
+#include "memoria/memoria.h"
 
 #define PROTOCOLO_SALIDA "bye"
 

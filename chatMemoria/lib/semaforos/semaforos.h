@@ -1,7 +1,7 @@
 #ifndef SEMAFOROS_H
 #define SEMAFOROS_H
 
-#include <sys/types.h>
+#include <sys/ipc.h>
 
 // Señales V y P (respectivamente) de manejo de semáforos básica
 
