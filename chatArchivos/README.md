@@ -1,1 +1,4 @@
-- Usar flock()
+### Limitaciones
+- El lector tiene una latencia propia de 100ms para evitar una busy wait. Es recomendable que se cambie esta espera, y se sincronice con semáforos.
+- No se podrá leer ninguno de los archivos hasta que no se abran los dos procesos.
+- Una vez que un "final" introduce el protocolo de salida (véase en ```lib/com.h```), se borrarán los archivos usados para la comunicación. Por un lado, esto implica que solamente habrá dos puntos en un mismo conjunto de canales (solamente n procesos con el mismo canal de lectura y escritura) y, por otro, significa que no podrá ver el log creado por el chat.

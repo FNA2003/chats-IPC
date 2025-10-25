@@ -8,34 +8,35 @@
 
 extern sig_atomic_t ejecutar;
 
-// Nota, usamos el '\n' como delimitador
 
 void productor(FILE *fEscritura) {
-    printf("Configurado, para dejar de enviar mensajes ingrese '%s'\n", PROTOCOLO_SALIDA);
+    printf("Chat iniciado. Para salir, escriba '%s'\n", PROTOCOLO_SALIDA);
 
     char buffer[NCARAC_MENSAJE];
 
     do {
-        if(!ejecutar) break; // Se recibió la señal que el padre debe terminar
+        if (!ejecutar) break; // Si el consumidor terminó, salimos
 
         memset(buffer, '\0', NCARAC_MENSAJE);
 
-        // Tomo lo que se escriba por la entrada estándar, incluido el '\n'
+        // Recibimos caracteres por entrada estandar (o, hasta '\n')
         printf(">: ");
         fgets(buffer, NCARAC_MENSAJE, stdin);
+        buffer[strlen(buffer) - 2] = '\n'; // Nos tenemos que asegurar que se termine
+                                           // con '\n' para respetar el protocolo.
+                                           // Además fgets() ya introduce el '\0', no lo alteramos.
 
-        // Intentamos escribir y manejos posibles fallos
+        // Escribimos el mensaje en el archivo
         if (fwrite(buffer, strlen(buffer), 1, fEscritura) != 1) {
-            // Si se borró el archivo o su referencia, finalizamos la producción
             if (errno == EINVAL || errno == EINTR) return;
-            // Pero, si hubo otro error, lo mostramos antes de seguir
             else perror("Error de escritura");
         }
-        
-        fflush(fEscritura); // Forzamos a que pase el buffer a disco
 
-    } while(strncmp(buffer, PROTOCOLO_SALIDA, strlen(PROTOCOLO_SALIDA)) != 0);
+        fflush(fEscritura); // Forzamos la escritura en el disco (forzamos el buffer interno)
+
+    } while (strncmp(buffer, PROTOCOLO_SALIDA, strlen(PROTOCOLO_SALIDA)) != 0);
 }
+
 
 void consumidor(FILE *fLectura) {
     char buffer[NCARAC_MENSAJE];
@@ -43,13 +44,16 @@ void consumidor(FILE *fLectura) {
     do {
         memset(buffer, '\0', NCARAC_MENSAJE);
 
-        // Si puedo, obtengo el mensaje
-        if (fgets(buffer, NCARAC_MENSAJE, fLectura))
+        // Intentamos leer una línea del archivo
+        if (fgets(buffer, NCARAC_MENSAJE, fLectura)) {
             printf("[USUARIO]: %s", buffer);
-        // Si falló la lectura, reseteo las flags para que la próxima lectura lea sin fallar
-        else
-            clearerr(fLectura);
-    } while(strncmp(buffer, PROTOCOLO_SALIDA, strlen(PROTOCOLO_SALIDA)) != 0);
+        } else {
+            clearerr(fLectura); // Limpiamos EOF si se alcanzó
+            usleep(100000);     // Esperamos 100ms para evitar busy wait
+        }
 
+    } while (strncmp(buffer, PROTOCOLO_SALIDA, strlen(PROTOCOLO_SALIDA)) != 0);
+
+    // Avisamos al padre que terminamos
     kill(getppid(), SIGUSR1);
 }
