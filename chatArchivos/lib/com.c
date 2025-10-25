@@ -22,9 +22,6 @@ void productor(FILE *fEscritura) {
         // Recibimos caracteres por entrada estandar (o, hasta '\n')
         printf(">: ");
         fgets(buffer, NCARAC_MENSAJE, stdin);
-        buffer[strlen(buffer) - 2] = '\n'; // Nos tenemos que asegurar que se termine
-                                           // con '\n' para respetar el protocolo.
-                                           // Además fgets() ya introduce el '\0', no lo alteramos.
 
         // Escribimos el mensaje en el archivo
         if (fwrite(buffer, strlen(buffer), 1, fEscritura) != 1) {
