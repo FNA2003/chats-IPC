@@ -4,50 +4,52 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#include <signal.h>
 
-void productor(int fdEscritura) {
+extern sig_atomic_t ejecutar;
+
+// Nota, usamos el '\n' como delimitador
+
+void productor(FILE *fEscritura) {
+    printf("Configurado, para dejar de enviar mensajes ingrese '%s'\n", PROTOCOLO_SALIDA);
+
     char buffer[NCARAC_MENSAJE];
 
     do {
+        if(!ejecutar) break; // Se recibió la señal que el padre debe terminar
+
         memset(buffer, '\0', NCARAC_MENSAJE);
 
-        flock(fdEscritura, LOCK_EX); // Lockeo para evitar que se lea cuando vamos a escribir
-
-        fgets(buffer, NCARAC_MENSAJE, stdin); // Tomo lo que se escriba por la entrada estándar
-        buffer[strlen(buffer) - 1] = '\0'; // Saco el salto de línea
+        // Tomo lo que se escriba por la entrada estándar, incluido el '\n'
+        printf(">: ");
+        fgets(buffer, NCARAC_MENSAJE, stdin);
 
         // Intentamos escribir y manejos posibles fallos
-        if (write(fdEscritura, buffer, NCARAC_MENSAJE) < 0) {
+        if (fwrite(buffer, strlen(buffer), 1, fEscritura) != 1) {
             // Si se borró el archivo o su referencia, finalizamos la producción
             if (errno == EINVAL || errno == EINTR) return;
             // Pero, si hubo otro error, lo mostramos antes de seguir
             else perror("Error de escritura");
         }
+        
+        fflush(fEscritura); // Forzamos a que pase el buffer a disco
 
-        flock(fdEscritura, LOCK_UN); // Libero el lockeo
     } while(strncmp(buffer, PROTOCOLO_SALIDA, strlen(PROTOCOLO_SALIDA)) != 0);
 }
 
-void consumidor(int fdLectura) {
+void consumidor(FILE *fLectura) {
     char buffer[NCARAC_MENSAJE];
 
     do {
         memset(buffer, '\0', NCARAC_MENSAJE);
 
-        flock(fdLectura, LOCK_EX); // Lockeo para evitar que se borre lo que quiero leer
-
-        // Intentamos leer y manejos posibles fallos
-        if (read(fdLectura, buffer, NCARAC_MENSAJE) < 0) {
-            // Si se borró el archivo o su referencia, finalizamos la lectura
-            if (errno == EINVAL || errno == EINTR) return;
-            // Pero, si hubo otro error, lo mostramos antes de seguir
-            else perror("Error de lectura!");
-        }
-
-        // Si hay algo escrito, lo leemos
-        if (strlen(buffer) > 0)
-            printf("[USUARIO]: %s\n", buffer);
-
-        flock(fdLectura, LOCK_UN); // Libero el lockeo
+        // Si puedo, obtengo el mensaje
+        if (fgets(buffer, NCARAC_MENSAJE, fLectura))
+            printf("[USUARIO]: %s", buffer);
+        // Si falló la lectura, reseteo las flags para que la próxima lectura lea sin fallar
+        else
+            clearerr(fLectura);
     } while(strncmp(buffer, PROTOCOLO_SALIDA, strlen(PROTOCOLO_SALIDA)) != 0);
+
+    kill(getppid(), SIGUSR1);
 }
