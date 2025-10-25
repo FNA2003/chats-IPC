@@ -3,7 +3,7 @@ CC = gcc
 CFLAGS = -Ilib -Wall -Wextra
 
 # Rutas de compilables
-SRC = src/main.c
+SRC = src/main.c lib/com.c
 
 # Nombre del compilado
 TAR = chatArchivos.out
